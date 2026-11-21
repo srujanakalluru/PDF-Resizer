@@ -223,5 +223,64 @@
       <button type="submit" id="submitBtn" disabled>Resize PDF</button>
     </form>
   </main>
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const browseBtn = document.getElementById('browseBtn');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSizeOrig = document.getElementById('fileSizeOrig');
+    const targetValue = document.getElementById('targetValue');
+    const submitBtn = document.getElementById('submitBtn');
+
+    let selectedFile = null;
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function onFileSelected(file) {
+      if (!file || file.type !== 'application/pdf') {
+        alert('Please select a valid PDF file.');
+        return;
+      }
+      selectedFile = file;
+      fileName.textContent = file.name;
+      fileSizeOrig.textContent = formatBytes(file.size);
+      fileInfo.classList.add('visible');
+      updateSubmitState();
+    }
+
+    function updateSubmitState() {
+      submitBtn.disabled = !(selectedFile && targetValue.value > 0);
+    }
+
+    browseBtn.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) onFileSelected(fileInput.files[0]);
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) onFileSelected(file);
+    });
+
+    targetValue.addEventListener('input', updateSubmitState);
+  </script>
 </body>
 </html>
