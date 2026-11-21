@@ -296,6 +296,21 @@
     <a class="download-btn" id="downloadBtn" download="resized.pdf">⬇ Download Resized PDF</a>
   </main>
   <script>
+    // cdnjs-pinned versions; never load from arbitrary URLs
+    const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    const PDFJS_WORKER_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const PDFLIB_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+
+    async function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Failed to load: ' + src));
+        document.head.appendChild(s);
+      });
+    }
+
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
     const browseBtn = document.getElementById('browseBtn');
@@ -353,6 +368,176 @@
     });
 
     targetValue.addEventListener('input', updateSubmitState);
+
+    // ── PDF processing ──────────────────────────────────────────────────────
+
+    const progressWrap = document.getElementById('progressWrap');
+    const progressLabel = document.getElementById('progressLabel');
+    const progressFill = document.getElementById('progressFill');
+    const statusMsg = document.getElementById('statusMsg');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const resizeForm = document.getElementById('resizeForm');
+
+    function setProgress(pct, label) {
+      progressFill.style.width = pct + '%';
+      if (label) progressLabel.textContent = label;
+    }
+
+    function showStatus(type, msg) {
+      statusMsg.className = 'status visible ' + type;
+      statusMsg.textContent = msg;
+    }
+
+    function clearStatus() {
+      statusMsg.className = 'status';
+      statusMsg.textContent = '';
+      downloadBtn.classList.remove('visible');
+      downloadBtn.href = '#';
+    }
+
+    /**
+     * Renders each page of a PDF.js document to a JPEG data URL at the given
+     * scale, then assembles a new PDF with pdf-lib. Returns the PDF bytes.
+     */
+    async function renderToJpegPdf(pdfjsDoc, scale, jpegQuality) {
+      const { PDFDocument } = window.PDFLib;
+      const outDoc = await PDFDocument.create();
+
+      for (let i = 1; i <= pdfjsDoc.numPages; i++) {
+        const page = await pdfjsDoc.getPage(i);
+        const viewport = page.getViewport({ scale });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
+        const ctx = canvas.getContext('2d');
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        const dataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
+        const base64 = dataUrl.split(',')[1];
+        const imgBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+
+        const jpgImage = await outDoc.embedJpg(imgBytes);
+        const outPage = outDoc.addPage([viewport.width, viewport.height]);
+        outPage.drawImage(jpgImage, { x: 0, y: 0, width: viewport.width, height: viewport.height });
+      }
+
+      return outDoc.save();
+    }
+
+    /**
+     * Binary-searches for a JPEG quality value that produces output close to
+     * targetBytes. Returns the final PDF bytes.
+     *
+     * Strategy: fix scale=1 (no dimension change) and vary quality 0.1–0.95.
+     * If even quality=0.1 exceeds targetBytes, also shrink scale.
+     */
+    async function resizePdf(arrayBuffer, targetBytes) {
+      await loadScript(PDFJS_CDN);
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_CDN;
+      await loadScript(PDFLIB_CDN);
+
+      setProgress(10, 'Loading PDF…');
+      const pdfjsDoc = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+      const MIN_QUALITY = 0.08;
+      const MAX_QUALITY = 0.95;
+      let lo = MIN_QUALITY;
+      let hi = MAX_QUALITY;
+      let bestBytes = null;
+      let scale = 1.0;
+      const MAX_ITERS = 10;
+
+      for (let iter = 0; iter < MAX_ITERS; iter++) {
+        const quality = (lo + hi) / 2;
+        setProgress(10 + iter * 8, `Pass ${iter + 1}: quality=${quality.toFixed(2)}…`);
+
+        const bytes = await renderToJpegPdf(pdfjsDoc, scale, quality);
+
+        if (bytes.length <= targetBytes) {
+          bestBytes = bytes;
+          lo = quality; // can go higher quality
+        } else {
+          hi = quality; // must go lower quality
+        }
+
+        if (hi - lo < 0.01) break;
+      }
+
+      // If still oversized at min quality, shrink page dimensions progressively
+      if (!bestBytes) {
+        for (let shrink = 0.9; shrink >= 0.3; shrink -= 0.1) {
+          scale = shrink;
+          setProgress(85, `Scaling pages to ${Math.round(shrink * 100)}%…`);
+          const bytes = await renderToJpegPdf(pdfjsDoc, scale, MIN_QUALITY);
+          if (bytes.length <= targetBytes) {
+            bestBytes = bytes;
+            break;
+          }
+        }
+      }
+
+      setProgress(100, 'Done');
+      return bestBytes;
+    }
+
+    resizeForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!selectedFile) return;
+
+      clearStatus();
+      progressWrap.classList.add('visible');
+      submitBtn.disabled = true;
+
+      const unit = document.getElementById('targetUnit').value;
+      const multiplier = unit === 'MB' ? 1024 * 1024 : 1024;
+      const targetBytes = parseFloat(targetValue.value) * multiplier;
+
+      if (targetBytes <= 0) {
+        showStatus('error', 'Target size must be greater than 0.');
+        progressWrap.classList.remove('visible');
+        submitBtn.disabled = false;
+        return;
+      }
+
+      if (targetBytes >= selectedFile.size) {
+        showStatus('warn', `The file is already ${formatBytes(selectedFile.size)}, which is within your target. No changes needed.`);
+        progressWrap.classList.remove('visible');
+        submitBtn.disabled = false;
+        return;
+      }
+
+      try {
+        const arrayBuffer = await selectedFile.arrayBuffer();
+        const resultBytes = await resizePdf(arrayBuffer, targetBytes);
+
+        if (!resultBytes) {
+          showStatus('error', 'Could not reach target size. Try a larger target.');
+        } else {
+          const blob = new Blob([resultBytes], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          const outName = selectedFile.name.replace(/\.pdf$/i, '') + '_resized.pdf';
+
+          downloadBtn.href = url;
+          downloadBtn.download = outName;
+          downloadBtn.classList.add('visible');
+
+          const achieved = formatBytes(resultBytes.length);
+          const warn = resultBytes.length > targetBytes;
+          showStatus(
+            warn ? 'warn' : 'success',
+            warn
+              ? `Closest achievable size: ${achieved} (target was ${formatBytes(targetBytes)}).`
+              : `Resized to ${achieved}. Ready to download.`
+          );
+        }
+      } catch (err) {
+        showStatus('error', 'Error: ' + err.message);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
   </script>
 </body>
 </html>
