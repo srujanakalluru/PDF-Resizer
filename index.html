@@ -57,12 +57,171 @@
       font-size: 0.9rem;
       margin-bottom: 28px;
     }
+
+    .field {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    .drop-zone {
+      border: 2px dashed var(--color-border);
+      border-radius: var(--radius);
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: var(--color-primary);
+      background: #eff6ff;
+    }
+
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+
+    .drop-zone-icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+
+    .drop-zone-label {
+      font-size: 0.875rem;
+      color: var(--color-muted);
+    }
+
+    .drop-zone-label span {
+      color: var(--color-primary);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .file-info {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #f1f5f9;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+    }
+
+    .file-info.visible { display: flex; }
+
+    .file-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 500;
+    }
+
+    .file-size-orig {
+      color: var(--color-muted);
+      flex-shrink: 0;
+    }
+
+    .size-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    .size-row .field { flex: 1; margin-bottom: 0; }
+
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[type="number"]:focus,
+    select:focus {
+      border-color: var(--color-primary);
+    }
+
+    button[type="submit"] {
+      width: 100%;
+      padding: 10px 16px;
+      background: var(--color-primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 24px;
+      transition: background 0.15s;
+    }
+
+    button[type="submit"]:hover:not(:disabled) {
+      background: var(--color-primary-hover);
+    }
+
+    button[type="submit"]:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
   <main class="card">
     <h1>PDF Resizer</h1>
     <p class="subtitle">Compress a PDF to a target file size.</p>
+
+    <form id="resizeForm" novalidate>
+      <div class="field">
+        <label>PDF File</label>
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="fileInput" accept=".pdf,application/pdf">
+          <div class="drop-zone-icon">📄</div>
+          <p class="drop-zone-label">
+            Drag &amp; drop a PDF here or <span id="browseBtn">browse</span>
+          </p>
+        </div>
+        <div class="file-info" id="fileInfo">
+          <span class="file-name" id="fileName"></span>
+          <span class="file-size-orig" id="fileSizeOrig"></span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="targetValue">Target Size</label>
+        <div class="size-row">
+          <div class="field">
+            <input
+              type="number"
+              id="targetValue"
+              min="1"
+              step="any"
+              placeholder="e.g. 500"
+              required
+            >
+          </div>
+          <div class="field" style="max-width:110px">
+            <select id="targetUnit">
+              <option value="KB">KB</option>
+              <option value="MB">MB</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" id="submitBtn" disabled>Resize PDF</button>
+    </form>
   </main>
 </body>
 </html>
