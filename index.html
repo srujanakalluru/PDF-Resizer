@@ -175,6 +175,68 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+
+    .progress-wrap {
+      display: none;
+      margin-top: 20px;
+    }
+
+    .progress-wrap.visible { display: block; }
+
+    .progress-label {
+      font-size: 0.85rem;
+      color: var(--color-muted);
+      margin-bottom: 6px;
+    }
+
+    .progress-bar-track {
+      height: 6px;
+      background: var(--color-border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--color-primary);
+      border-radius: 999px;
+      transition: width 0.2s;
+      width: 0%;
+    }
+
+    .status {
+      display: none;
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .status.visible { display: flex; }
+    .status.error { background: #fef2f2; color: var(--color-error); }
+    .status.success { background: #f0fdf4; color: var(--color-success); }
+    .status.warn { background: #fffbeb; color: #b45309; }
+
+    .download-btn {
+      display: none;
+      width: 100%;
+      padding: 10px 16px;
+      background: var(--color-success);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 12px;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .download-btn.visible { display: block; }
+    .download-btn:hover { background: #15803d; }
   </style>
 </head>
 <body>
@@ -222,6 +284,16 @@
 
       <button type="submit" id="submitBtn" disabled>Resize PDF</button>
     </form>
+
+    <div class="progress-wrap" id="progressWrap">
+      <p class="progress-label" id="progressLabel">Processing…</p>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <div class="status" id="statusMsg"></div>
+    <a class="download-btn" id="downloadBtn" download="resized.pdf">⬇ Download Resized PDF</a>
   </main>
   <script>
     const dropZone = document.getElementById('dropZone');
